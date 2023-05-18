@@ -24,12 +24,18 @@ def request_api_artist(artist_id, header):
     base_url = "https://api.spotify.com/v1/"
     top_track_res = requests.get(base_url + "artists/" + artist_id + "/top-tracks?market=de", headers=header)
     top_track_res = top_track_res.json()
-    df_t = pd.DataFrame(top_track_res["tracks"])
-    fig = plt.figure(figsize=(18,10))
-    ax = fig.add_axes([0,0,1,1])
-    ax.bar(df_t["name"], df_t["popularity"])
-    plt.savefig('top_tracks.jpg',bbox_inches='tight', dpi=150)
-    return fig
+    try:
+        top_track_res["tracks"]
+    except KeyError:
+        print("Invalid ID") 
+        return
+    else:
+        #print(top_track_res)
+        df_t = pd.DataFrame(top_track_res["tracks"])
+        fig = plt.figure(figsize=(18,10))
+        ax = fig.add_axes([0,0,1,1])
+        ax.bar(df_t["name"], df_t["popularity"])
+        plt.savefig('top_tracks.jpg',bbox_inches='tight', dpi=150)
 
 #converts string to use %25 instead of spaces for search function
 def space_to_percent(string):
@@ -39,16 +45,28 @@ def space_to_percent(string):
 
 #search for artists, returns list of artists
 def artist_search(search_term, header):
+    #print(search_term)
     base_url = "https://api.spotify.com/v1/"
     #contains information about market, search type and result limit
     market = "&type=artist&market=de&limit=10"
     search_term = space_to_percent(search_term)
+    #print(search_term)
     artist_res = requests.get(base_url + "search?q=" + search_term + market, headers=header)
     artist_res = artist_res.json()
+    try:
+        artist_res["artists"]["items"]
+    except KeyError:
+        print("Invalid Search term") 
+        return
     df_artist = pd.DataFrame(artist_res["artists"]["items"])
     df_artist = df_artist.drop(["external_urls", "followers", "genres", "href", "images", "popularity", "type", "uri"], axis=1)
     return df_artist
 
 
 
-
+if __name__ == "__main__":
+    client_id = input("Enter ID: ")
+    client_secret = input("Enter secret: ")
+    header = get_header(client_id,client_secret)
+    request_api_artist("4FmJD0mpgQ70SNt2EKK8tq", header)
+    print(artist_search("Miracle of Sound", header))
