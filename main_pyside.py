@@ -1,8 +1,14 @@
 import sys
 import PySide6.QtWidgets as pq
 from PySide6.QtGui import QAction, QIcon, QKeySequence, QPixmap, QHideEvent
-from PySide6.QtCore import Qt, QSize
+import PySide6.QtCore as pc
 import spotify_artist_backend as sa
+import global_signal as glo
+
+#custom global signal to trigger certain actions once the temp window appears and hides
+temp_window_hidden_signal = glo.SignalSharingObject()
+temp_window_show_signal = glo.SignalSharingObject()
+
 
 
 class MainWindow(pq.QMainWindow):
@@ -11,7 +17,7 @@ class MainWindow(pq.QMainWindow):
         self.setWindowTitle("Top Tracks")
         self.setFixedSize(950, 600)
 
-        self.temp_window = None
+        self.temp_window = Temp_Window()
         
         #data for the spotify api
         client_id = "2f92e1fb67bc417ba772633afa78846b"
@@ -59,13 +65,15 @@ class MainWindow(pq.QMainWindow):
         widget = pq.QWidget()
         widget.setLayout(layout)
         self.setCentralWidget(widget)
+
+        temp_window_hidden_signal.my_Signal.connect(self.confirm)
+
         
 
 
     def artist_id_result(self):
-        id = self.artist_id_line.selectedText()
-        print(id)
-        fig = sa.request_api_artist(id, self.header)
+        id = self.artist_id_line.text()
+        sa.request_api_artist(id, self.header)
         self.graph_label.setPixmap(QPixmap("top_tracks.jpg"))
 
     def artist_search_result(self):
@@ -81,52 +89,72 @@ class MainWindow(pq.QMainWindow):
         for index, row in artist_selection.iterrows():
             optionslist.append(row["name"])
         
+        self.temp_window = Temp_Window(artist_selection)
+        self.temp_window.show()
+        temp_window_show_signal.my_Signal.emit()        
 
-        dia = pq.QMessageBox(self)
-        dia.setWindowTitle("Confirm Selection")
-        dia.setStandardButtons(pq.QMessageBox.Yes)
         
         
-    def confirm(self, s):
-        print("Ok")
-        self.accept()
-
+        
+    def confirm(self):
+        print(self.temp_window.return_value)
+        self.artist_id_line.setText(self.temp_window.return_value)
+        self.artist_search_line.setText("")
+        sa.request_api_artist(self.temp_window.return_value, self.header)
+        self.graph_label.setPixmap(QPixmap("top_tracks.jpg"))
+        
+        
 
 
         
     
 
 
-class temp_window(pq.QWidget):
-    def __init__(self, selection, parent=None):
+class Temp_Window(pq.QWidget):
+    def __init__(self, selection = {"name" : "Nothing Given"}, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Select Artist")
+        self.setFixedSize(200,100)
 
         
         self.return_value = None
         self.selection = selection
-        layout = pq.QHBoxLayout()
+        layout = pq.QVBoxLayout()
         self.combox = pq.QComboBox()
-        self.combox.addItems(self.selection["name"])
+        self.combox.addItems(["Please Select"])
+        #self.combox.currentTextChanged.connect(self.enable_button)
 
-        button = pq.QPushButton("Conform selection")
-        button.clicked.connect(self.confirmed)
+        self.button = pq.QPushButton("Conform selection")
+        self.button.clicked.connect(self.confirmed)
+        self.button.setDisabled(True)
 
         layout.addWidget(self.combox)
-        layout.addWidget(button)
+        layout.addWidget(self.button)
         self.setLayout(layout)
-        print(self.selection)
+        #print(self.selection)
+
+        temp_window_show_signal.my_Signal.connect(self.enable_button)
+
+    def enable_button(self):
+        self.button.setDisabled(False)
+        self.combox.addItems(self.selection["name"])
 
     def confirmed(self):
         data = self.selection
         value = self.combox.currentText()
-        print("confirmed value:", value)
+        #print("confirmed value:", value)
         ID = data.loc[data["name"]==value]
         ret_id = ""
         for index, row in ID.iterrows():
             ret_id = row["id"]
         self.return_value = ret_id
+        #sequence 1 to 10
+        for i in range(1, 11):
+            self.combox.removeItem(i)
+        temp_window_hidden_signal.my_Signal.emit()
         self.hide()
+        
+
     
 
 
